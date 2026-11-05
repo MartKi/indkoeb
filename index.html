@@ -700,7 +700,7 @@ $("#closeSettings").onclick = () => {
   }
   $("#settings").close();
 };
-// Slet med mulighed for at fortryde i 8 sekunder (i stedet for "Er du sikker?")
+// Slet med mulighed for at fortryde i 4 sekunder (i stedet for "Er du sikker?")
 let undoTimer = null, undoItems = null;
 function removeWithUndo(list, msg) {
   if (!list.length) return;
@@ -709,7 +709,7 @@ function removeWithUndo(list, msg) {
   $("#toastMsg").textContent = msg;
   $("#toast").classList.add("show");
   clearTimeout(undoTimer);
-  undoTimer = setTimeout(() => { $("#toast").classList.remove("show"); undoItems = null; }, 8000);
+  undoTimer = setTimeout(() => { $("#toast").classList.remove("show"); undoItems = null; }, 4000);
 }
 $("#undoBtn").onclick = () => {
   if (undoItems) run(backend.restore(undoItems));
