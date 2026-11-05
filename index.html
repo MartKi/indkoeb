@@ -45,6 +45,13 @@
   .item.done .who { opacity:.5; }
   .clearBar { display:flex; justify-content:center; margin:10px 0 0; }
   button.danger { color:var(--err); border-color:var(--err); }
+  .suggest { display:flex; gap:6px; overflow-x:auto; margin-top:8px; padding-bottom:2px; scrollbar-width:none; }
+  .suggest::-webkit-scrollbar { display:none; }
+  .suggest:empty { display:none; }
+  .suggest .lbl { flex:none; align-self:center; font-size:12px; color:var(--muted); }
+  .chip { flex:none; font-size:15px; padding:7px 12px; border-radius:999px; background:var(--card); color:var(--ink); border:1px solid var(--line); white-space:nowrap; }
+  .chip small { color:var(--muted); font-size:11px; margin-left:4px; }
+  .chip:first-of-type { border-color:var(--accent); }
   .empty { text-align:center; color:var(--muted); margin-top:60px; }
   dialog { border:1px solid var(--line); border-radius:14px; background:var(--card); color:var(--ink); max-width:420px; width:calc(100% - 28px); max-height:calc(100% - 40px); }
   dialog::backdrop { background:rgba(0,0,0,.4); }
@@ -66,11 +73,11 @@
     <button class="ghost" id="settingsBtn">Indstillinger</button>
   </div>
   <form id="addForm" autocomplete="off">
-    <input type="text" id="newItem" placeholder="Tilføj vare, fx agurk" list="suggestions" enterkeyhint="done">
+    <input type="text" id="newItem" placeholder="Tilføj vare, fx agurk" enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="suggest">
     <button type="submit">Tilføj</button>
   </form>
+  <div id="suggest" class="suggest" aria-label="Forslag"></div>
   <div id="banner" class="banner" role="alert"></div>
-  <datalist id="suggestions"></datalist>
 </header>
 
 <main id="list"></main>
@@ -128,6 +135,45 @@ const DEFAULT_ORDER = [
   "Snacks og slik","Husholdning","Personlig pleje","Andet"
 ];
 
+// Indbygget vareliste til forslag mens man skriver (kan frit udvides)
+const PRODUCTS = [
+  "mælk","fløde","kylling","brød","grøntsager","frugt",
+  "agurk","tomat","tomater","cherrytomater","peberfrugt","rød peberfrugt","salat","icebergsalat","rucola","spinat",
+  "babyspinat","gulerødder","kartofler","bagekartofler","nye kartofler","løg","rødløg","forårsløg","hvidløg","porrer",
+  "broccoli","blomkål","squash","aubergine","champignon","svampe","avocado","bananer","æbler","pærer",
+  "appelsiner","citroner","lime","mandariner","clementiner","vindruer","jordbær","blåbær","hindbær","vandmelon",
+  "honningmelon","ananas","mango","kiwi","ingefær","persille","basilikum","purløg","dild","koriander",
+  "mynte","timian","rosmarin","rødbeder","selleri","bladselleri","majskolber","radiser","spidskål","hvidkål",
+  "rødkål","grønkål","pastinak","fennikel","asparges","sukkerærter","bønner","grønne bønner","edamamebønner","granatæble",
+  "dadler","figner","rosiner","salatmix","kartoffelsalat","rugbrød","franskbrød","toastbrød","fuldkornsbrød","boller",
+  "rundstykker","baguette","flutes","tortillas","wraps","pitabrød","burgerboller","hotdogbrød","knækbrød","croissanter",
+  "wienerbrød","kage","boller med birkes","surdejsbrød","letmælk","minimælk","sødmælk","skummetmælk","havredrik","mandeldrik",
+  "sojadrik","kærnemælk","piskefløde","madlavningsfløde","kaffefløde","creme fraiche","smør","plantesmør","smørbar","ost",
+  "skiveost","revet","mozzarella","parmesan","feta","hytteost","flødeost","mascarpone","ricotta","halloumi",
+  "brie","cheddar","yoghurt","græsk yoghurt","skyr","ymer","tykmælk","kvark","æg","frilandsæg",
+  "økologiske","koldskål","hakket oksekød","hakket svinekød","hakket kylling","kyllingebryst","kyllingelår","hel kylling","kyllingefilet","bacon",
+  "pølser","grillpølser","medisterpølse","frikadeller","oksebøf","hakkebøf","steak","culottesteak","flæskesteg","mørbrad",
+  "svinekoteletter","kalkun","laks","laksefilet","torsk","rejer","tun","fiskefrikadeller","rødspætte","sild",
+  "makrel","skinke","kebab","leverpostej","nuggets","lammekød","pålæg","salami","hamburgerryg","rullepølse",
+  "spegepølse","kyllingepålæg","hummus","remoulade","makrel i tomat","ris","basmatiris","jasminris","risottoris","pasta",
+  "spaghetti","penne","fusilli","lasagneplader","nudler","hvedemel","rugmel","sukker","flormelis","brun",
+  "farin","havregryn","müsli","cornflakes","morgenmadsprodukt","olie","olivenolie","rapsolie","eddike","balsamico",
+  "bouillon","hønsebouillon","grøntsagsbouillon","kaffe","instant kaffe","te","grøn te","nutella","marmelade","honning",
+  "peanutbutter","linser","røde linser","kikærter","couscous","bulgur","quinoa","gær","bagepulver","natron",
+  "kakao","chokolade","mørk chokolade","ketchup","sennep","mayonnaise","sojasauce","pesto","tacokrydderi","tacoskaller",
+  "ris crispies","salt","peber","paprika","karry","kanel","oregano","spidskommen","chili","chiliflager",
+  "hakkede tomater","flåede tomater","tomatpuré","passata","kokosmælk","majs","kidneybønner","hvide bønner","tun på dåse","oliven",
+  "kapers","syltede agurker","rødbeder på glas","frosne ærter","frossen spinat","frosne bær","vaniljeis","is","pizza","frossen pizza",
+  "pommes frites","fiskefileter","fiskestave","grøntsagsblanding","wokgrøntsager","vand","danskvand","kildevand","sodavand","cola",
+  "juice","appelsinjuice","æblejuice","øl","vin","rødvin","hvidvin","saft","cider","energidrik",
+  "iste","kakaomælk","smoothie","chips","slik","lakrids","nødder","mandler","cashewnødder","peanuts",
+  "popcorn","kiks","småkager","vingummi","chokoladebar","toiletpapir","køkkenrulle","opvaskemiddel","opvasketabs","vaskemiddel",
+  "skyllemiddel","affaldsposer","skraldeposer","bagepapir","husholdningsfilm","alufolie","batterier","elpærer","stearinlys","fyrfadslys",
+  "rengøringsmiddel","viskestykker","fryseposer","kaffefiltre","servietter","tandpasta","tandbørste","shampoo","balsam","sæbe",
+  "håndsæbe","deodorant","barberskum","barberblade","bodylotion","tamponer","bind","vatpinde","vat","solcreme",
+  "plastre","hårspray","lipbalm","bleer","vådservietter",
+];
+
 const KEYWORDS = {
   "Frugt og grønt": ["agurk","tomat","peberfrugt","salat","spinat","gulerod","kartoffel","løg","hvidløg","porre","broccoli","blomkål","squash","aubergine","champignon","svampe","avocado","banan","æble","pære","appelsin","citron","lime","mandarin","clementin","druer","jordbær","blåbær","hindbær","melon","ananas","mango","kiwi","ingefær","persille","basilikum","purløg","dild","koriander","rødbede","selleri","majs","radise","spidskål","hvidkål","rødkål","grønkål","pastinak","fennikel","asparges","ærter","bønner","frugt","grønt"],
   "Brød og bagværk": ["brød","rugbrød","toast","bolle","rundstykke","baguette","tortilla","wrap","kage","croissant","wienerbrød","pitabrød","burgerbolle","knækbrød"],
@@ -171,7 +217,7 @@ let myName = ls.get("myName", "");             // hvem der skriver varer på (ku
 let history_ = ls.get("history", []);   // tidligere varer til autocomplete (kun denne enhed)
 
 // Delt opsætning (butiksprofiler + lærte rettelser), synkroniseres via backend
-let meta = { profiles: {}, overrides: {} };
+let meta = { profiles: {}, overrides: {}, freq: {} };
 let metaLoaded = false;
 let activeId = ls.get("activeProfile", null); // valgt butik gælder kun denne enhed
 
@@ -274,7 +320,8 @@ if (demo) {
     async removeMany(ids) { save(load().filter(x => !ids.includes(x.id))); emit(); },
     async setOverride(name, cat) { mpatch({ overrides: { [name]: cat } }); },
     async saveProfile(id, p) { mpatch({ profiles: { [id]: p } }); },
-    async deleteProfile(id) { mpatch({ profiles: { [id]: DELETE } }); }
+    async deleteProfile(id) { mpatch({ profiles: { [id]: DELETE } }); },
+    async bumpFreq(names) { const f = ls.get(mkey, {}).freq || {}; mpatch({ freq: Object.fromEntries(names.map(n => [n, (f[n] || 0) + 1])) }); }
   };
   $("#mode").textContent = "Demo (lokal)";
   $("#mode").classList.add("demo");
@@ -308,7 +355,8 @@ if (demo) {
       async removeMany(ids) { const b = fs.writeBatch(db); ids.forEach(i => b.delete(fs.doc(col, i))); return b.commit(); },
       setOverride(name, cat) { return mset({ overrides: { [name]: cat } }); },
       saveProfile(id, p) { return mset({ profiles: { [id]: p } }); },
-      deleteProfile(id) { return mset({ profiles: { [id]: fs.deleteField() } }); }
+      deleteProfile(id) { return mset({ profiles: { [id]: fs.deleteField() } }); },
+      bumpFreq(names) { return mset({ freq: Object.fromEntries(names.map(n => [n, fs.increment(1)])) }); }
     };
     $("#mode").textContent = "Forbinder…";
   } catch (e) {
@@ -351,8 +399,7 @@ function render() {
     bar.appendChild(btn); root.appendChild(bar);
   }
 
-  const dl = $("#suggestions"); dl.innerHTML = "";
-  history_.forEach(n => dl.appendChild(new Option(n, n)));
+  renderSuggest();
 }
 
 function renderStores() {
@@ -398,17 +445,138 @@ $("#addForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const raw = $("#newItem").value.trim();
   if (!raw) return;
-  const by = askName();
   // Tillad flere varer adskilt af komma: "mælk, æg, agurk"
-  raw.split(",").map(s => s.trim()).filter(Boolean).forEach(name => {
+  addItems(raw.split(","));
+  $("#newItem").value = "";
+  $("#newItem").focus();
+  renderSuggest();
+});
+
+function addItems(names) {
+  names = names.map(s => s.trim()).filter(Boolean);
+  if (!names.length) return;
+  const by = askName();
+  names.forEach(name => {
     run(backend.add({ name, category: categorize(name), checked: false, ...(by ? { by } : {}) }));
     const n = normName(name);
     if (!history_.includes(n)) history_.push(n);
   });
   ls.set("history", history_.slice(-500));
-  $("#newItem").value = "";
-  $("#newItem").focus();
-});
+  run(backend.bumpFreq([...new Set(names.map(normName))]));
+}
+
+// ============================================================
+// FORSLAG MENS MAN SKRIVER
+// Kilder: indbygget vareliste + jeres egne varer (delt brugsfrekvens,
+// rettelser og denne telefons historik). Forslag, aldrig automatisk rettelse.
+// ============================================================
+// Gør "ae/oe/aa" og "æ/ø/å" ens, så det virker på et tastatur uden æøå
+function fold(t) { return t.toLowerCase().replace(/æ/g, "ae").replace(/ø/g, "oe").replace(/å/g, "aa").replace(/[éè]/g, "e").replace(/ü/g, "u"); }
+
+// Damerau-Levenshtein (bytte af to nabobogstaver tæller som én fejl)
+function editDist(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+    const c = a[i-1] === b[j-1] ? 0 : 1;
+    d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + c);
+    if (i > 1 && j > 1 && a[i-1] === b[j-2] && a[i-2] === b[j-1]) d[i][j] = Math.min(d[i][j], d[i-2][j-2] + 1);
+  }
+  return d[a.length][b.length];
+}
+
+let vocabCache = null, vocabKey = "";
+function vocabulary() {
+  const key = history_.length + "|" + Object.keys(meta.freq || {}).length + "|" + Object.keys(meta.overrides || {}).length;
+  if (vocabCache && key === vocabKey) return vocabCache;
+  const set = new Set([...PRODUCTS, ...history_, ...Object.keys(meta.freq || {}), ...Object.keys(meta.overrides || {})]);
+  vocabCache = [...set].filter(Boolean).map(n => ({ n, f: fold(n), words: fold(n).split(/[^a-z0-9]+/).filter(Boolean) }));
+  vocabKey = key;
+  return vocabCache;
+}
+
+// Konsonant-skelet: "mlk" finder "mælk", som når man skriver hurtigt
+function skeleton(t) { return t.replace(/[aeiouy]/g, ""); }
+
+function suggestionsFor(query, max = 8) {
+  const q = fold(query.trim());
+  const onList = new Set(items.filter(i => !i.checked).map(i => normName(i.name)));
+  const freq = meta.freq || {};
+  const own = new Set(history_);
+  const scored = [];
+  for (const v of vocabulary()) {
+    if (onList.has(v.n)) continue;
+    let s = 0;
+    if (!q) s = 1;                                        // tomt felt: kun ofte købte (filtreres nedenfor)
+    else if (v.f === q) s = 95;
+    else if (v.f.startsWith(q)) s = 100 - Math.min(v.f.length - q.length, 20) * 0.5;
+    else if (v.words.some(w => w.startsWith(q))) s = 75;
+    else if (q.length >= 3 && v.f.includes(q)) s = 55;
+    else if (q.length >= 3 && skeleton(q) === q && v.words.some(w => skeleton(w).startsWith(q))) s = 45;
+    else if (q.length >= 4) {
+      // stavefejl: sammenlign med starten af ordet ("mozarela" ~ "mozzarella")
+      const allowed = q.length <= 5 ? 1 : 2;
+      let best = 99;
+      for (const w of [v.f, ...v.words]) {
+        for (const len of [q.length - 1, q.length, q.length + 1]) {
+          if (len < 2 || len > w.length) continue;
+          best = Math.min(best, editDist(q, w.slice(0, len)));
+        }
+      }
+      if (best <= allowed) s = 40 - best * 10;
+    }
+    if (!s) continue;
+    const base = s;
+    const used = freq[v.n] || 0;
+    if (!q && !used && !own.has(v.n)) continue;
+    s += Math.min(used, 10) * 4 + (own.has(v.n) ? 6 : 0);
+    scored.push([s, v.n, base]);
+  }
+  // Stavefejl-gæt vises kun, når der ikke er nok rigtige træf
+  if (scored.filter(x => x[2] >= 55).length >= 3) scored.splice(0, scored.length, ...scored.filter(x => x[2] >= 55));
+  scored.sort((a, b) => b[0] - a[0] || a[1].length - b[1].length || a[1].localeCompare(b[1], "da"));
+  return scored.slice(0, max).map(x => x[1]);
+}
+
+function currentSegment() {
+  const v = $("#newItem").value;
+  const i = v.lastIndexOf(",");
+  return { before: i >= 0 ? v.slice(0, i + 1) : "", seg: v.slice(i + 1).trim() };
+}
+
+function renderSuggest() {
+  const box = $("#suggest");
+  box.innerHTML = "";
+  const input = $("#newItem");
+  const { seg } = currentSegment();
+  if (document.activeElement !== input && !seg) return;
+  if (seg.length === 1) return; // ét bogstav giver for mange tilfældige forslag
+  const list = suggestionsFor(seg);
+  if (!list.length) return;
+  if (!seg) { const l = document.createElement("span"); l.className = "lbl"; l.textContent = "Ofte købt:"; box.appendChild(l); }
+  for (const name of list) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip";
+    b.textContent = name;
+    const cat = document.createElement("small"); cat.textContent = categorize(name).split(" ")[0];
+    b.appendChild(cat);
+    b.setAttribute("aria-label", "Tilføj " + name);
+    b.addEventListener("pointerdown", (e) => e.preventDefault()); // behold tastaturet åbent
+    b.addEventListener("click", () => {
+      addItems([name]);
+      const { before } = currentSegment();
+      // tidligere varer i feltet (før komma) bliver stående, kun det påbegyndte ord fjernes
+      input.value = before.replace(/,\s*$/, "").trim() ? before.trimEnd() + " " : "";
+      input.focus();
+      renderSuggest();
+    });
+    box.appendChild(b);
+  }
+}
+
+$("#newItem").addEventListener("input", renderSuggest);
+$("#newItem").addEventListener("focus", renderSuggest);
+$("#newItem").addEventListener("blur", () => setTimeout(() => { if (!currentSegment().seg) renderSuggest(); }, 150));
 
 // Butiksvalg (pr. enhed)
 $("#store").onchange = (e) => { activeId = e.target.value; ls.set("activeProfile", activeId); renderStores(); render(); };
@@ -488,7 +656,7 @@ $("#clearAll").onclick = () => {
 // ============================================================
 backend.subscribe((data) => { items = data; render(); });
 backend.subscribeMeta((data, fromCache) => {
-  meta = { profiles: data.profiles || {}, overrides: data.overrides || {} };
+  meta = { profiles: data.profiles || {}, overrides: data.overrides || {}, freq: data.freq || {} };
   // Første gang listen bruges: opret "Standard" ud fra lokale indstillinger fra den gamle version.
   // Fast id "standard", så to telefoner ikke laver hver sin. Kun når data er bekræftet af serveren.
   if (!fromCache && !metaLoaded) {

@@ -71,6 +71,9 @@ Firebase-nøglen ikke er hemmelig, og listerne er beskyttet af listekoden.
 - Efter indkøb: tryk **Ryd købte varer** nederst. Ikke-købte varer bliver stående til næste tur. **Tøm hele listen** ligger under Indstillinger.
   Brug samme liste hver gang, så delingslinket og hjemmeskærmsikonet bliver ved med at virke.
 - Fejl fra Firestore (fx forkerte regler) vises som en rød besked øverst
+- Forslag mens du skriver: "moz" giver mozzarella, "mozarela" og "mlk" virker også. Ét tryk tilføjer varen.
+  Forslagene lærer af jeres egne varer (brugsfrekvens deles mellem telefonerne). Tomt felt viser "Ofte købt".
+  Appen retter aldrig selv det, du skriver. Enter tilføjer præcis den tekst, der står i feltet.
 - Tilføj flere varer ad gangen med komma: `mælk, æg, agurk`
 - Afkrydsede varer flyttes til "Købt" nederst
 
