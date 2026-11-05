@@ -10,8 +10,12 @@ cd indkoebsliste
 python3 -m http.server 8000
 ```
 
-Åbn http://localhost:8000. Uden Firebase-opsætning kører appen i demo-tilstand
+Åbn http://localhost:8000. Appen er sat op mod Firebase-projektet `indkoeb-fff3d`.
+Sæt `apiKey` til `"DIN_API_KEY"` i `index.html` for at køre i demo-tilstand
 (data gemmes kun i din egen browser, ingen deling).
+
+Service workeren (offline-start) virker kun på `https://` og `localhost`. Test på
+telefon via lokalnettets IP virker derfor uden offline-start. Brug GitHub Pages til den test.
 
 ## Opsætning af live-deling (ca. 10 minutter, gratis)
 
@@ -27,14 +31,15 @@ python3 -m http.server 8000
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /lists/{listId}/items/{itemId} {
+    match /lists/{listId}/{document=**} {
       allow read, write: if listId.size() >= 8;
     }
   }
 }
 ```
 
-Reglen betyder: den, der kender listekoden (min. 8 tegn), har adgang. Der er ingen
+Reglen dækker både varer (`lists/{kode}/items`) og delt opsætning (`lists/{kode}/meta/config`
+med butiksprofiler og lærte rettelser). Den betyder: den, der kender listekoden (min. 8 tegn), har adgang. Der er ingen
 login. Koden er genereret tilfældigt (9 tegn) første gang appen åbnes.
 Det er fint til en indkøbsliste, men brug ikke mønsteret til følsomme data.
 Firebase `apiKey` i web-konfigurationen er ikke en hemmelighed, adgangen styres af reglerne.
@@ -58,13 +63,22 @@ Firebase-nøglen ikke er hemmelig, og listerne er beskyttet af listekoden.
 ## Funktioner
 
 - Live-sync mellem telefoner, med offline-cache (virker i butikker med dårlig dækning)
-- Auto-sortering via nøgleordsliste, rækkefølgen kan tilpasses din butik under Indstillinger
-- Ret en kategori manuelt, så husker appen valget til næste gang
+- Service worker: appen kan åbnes fra hjemmeskærmen uden net
+- Butiksprofiler: vælg butik øverst. Hver butik har sin egen rækkefølge af afdelinger.
+  Butikkerne deles med alle på listen, valget af butik gælder kun den enkelte telefon.
+- Ret en kategori manuelt, så husker appen valget til næste gang, også på de andre telefoner
+- Fejl fra Firestore (fx forkerte regler) vises som en rød besked øverst
 - Tilføj flere varer ad gangen med komma: `mælk, æg, agurk`
 - Afkrydsede varer flyttes til "Købt" nederst
 
 ## Næste skridt
 
 - AI-fallback for ukendte varer (kræver lille serverfunktion, så API-nøglen ikke ligger i browseren)
-- Flere butiksprofiler med hver sin kategorirækkefølge
-- Delt læring: gem rettelser i Firestore, så begge får gavn af dem
+- Validering i Firestore-reglerne (fx maks. længde på varenavne) og evt. App Check
+
+## Teststatus
+
+- Live-sync mellem to browsere mod Firestore: testet, under 1 sek. forsinkelse
+- Delte butiksprofiler og rettelser: testet
+- Offline-start via service worker og synkronisering efter genopkobling: testet i Chromium
+- Rigtig telefon og hjemmeskærmsinstallation: ikke testet endnu

@@ -4,24 +4,30 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2f7d4f">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Indkøb">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Indkøb</title>
 <style>
-  :root { --bg:#f6f7f4; --card:#fff; --ink:#1d2a22; --muted:#6b7a70; --accent:#2f7d4f; --line:#e3e8e2; }
+  :root { --bg:#f6f7f4; --card:#fff; --ink:#1d2a22; --muted:#6b7a70; --accent:#2f7d4f; --line:#e3e8e2; --err:#b42318; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#111613; --card:#1a211d; --ink:#e8efe9; --muted:#8fa096; --accent:#4fae77; --line:#26302a; }
+    :root { --bg:#111613; --card:#1a211d; --ink:#e8efe9; --muted:#8fa096; --accent:#4fae77; --line:#26302a; --err:#f97066; }
   }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; padding-bottom:90px; }
   header { position:sticky; top:0; background:var(--bg); padding:calc(env(safe-area-inset-top) + 10px) 14px 10px; border-bottom:1px solid var(--line); z-index:5; }
   .row { display:flex; gap:8px; align-items:center; }
-  h1 { font-size:18px; margin:0; flex:1; }
-  .badge { font-size:12px; color:var(--muted); }
+  h1 { font-size:18px; margin:0; flex:1; min-width:0; display:flex; align-items:center; gap:6px; }
+  select.store { font:inherit; font-weight:700; color:var(--ink); background:transparent; border:0; padding:2px 0; max-width:100%; min-width:0; text-overflow:ellipsis; }
+  .badge { font-size:12px; color:var(--muted); white-space:nowrap; }
   .badge.demo { color:#b45309; }
+  .badge.error { color:var(--err); }
+  .banner { display:none; margin-top:8px; padding:8px 10px; border-radius:8px; border:1px solid var(--err); color:var(--err); font-size:13px; }
+  .banner.show { display:block; }
   form { display:flex; gap:8px; margin-top:10px; }
-  input[type=text] { flex:1; font-size:16px; padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+  input[type=text] { flex:1; font-size:16px; padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--ink); width:100%; }
   button { font:inherit; border:0; border-radius:10px; padding:12px 16px; background:var(--accent); color:#fff; cursor:pointer; }
   button.ghost { background:transparent; color:var(--muted); padding:8px 10px; border:1px solid var(--line); font-size:14px; }
   main { padding:6px 14px; max-width:640px; margin:0 auto; }
@@ -33,20 +39,22 @@
   select.tag { max-width:110px; font-size:12px; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:8px; padding:4px; }
   .del { background:transparent; color:var(--muted); padding:4px 8px; font-size:18px; }
   .empty { text-align:center; color:var(--muted); margin-top:60px; }
-  dialog { border:1px solid var(--line); border-radius:14px; background:var(--card); color:var(--ink); max-width:420px; width:calc(100% - 28px); }
+  dialog { border:1px solid var(--line); border-radius:14px; background:var(--card); color:var(--ink); max-width:420px; width:calc(100% - 28px); max-height:calc(100% - 40px); }
   dialog::backdrop { background:rgba(0,0,0,.4); }
   .order li { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--line); list-style:none; }
   .order { padding:0; margin:10px 0; }
   .order span { flex:1; }
   .order button { padding:4px 10px; background:transparent; color:var(--ink); border:1px solid var(--line); }
   label { display:block; font-size:13px; color:var(--muted); margin-top:12px; }
+  .hint { font-size:12px; color:var(--muted); margin:4px 0 0; }
+  .storeBtns { flex-wrap:wrap; margin-top:6px; }
 </style>
 </head>
 <body>
 
 <header>
   <div class="row">
-    <h1>🛒 Indkøb</h1>
+    <h1><span aria-hidden="true">🛒</span><select id="store" class="store" aria-label="Butik"></select></h1>
     <span id="mode" class="badge"></span>
     <button class="ghost" id="settingsBtn">Indstillinger</button>
   </div>
@@ -54,6 +62,7 @@
     <input type="text" id="newItem" placeholder="Tilføj vare, fx agurk" list="suggestions" enterkeyhint="done">
     <button type="submit">Tilføj</button>
   </form>
+  <div id="banner" class="banner" role="alert"></div>
   <datalist id="suggestions"></datalist>
 </header>
 
@@ -61,8 +70,19 @@
 
 <dialog id="settings">
   <h3 style="margin-top:0">Indstillinger</h3>
-  <label for="code">Listekode (del den med din kone, brug en lang og tilfældig)</label>
-  <input type="text" id="code">
+  <label for="code">Listekode (min. 8 tegn, del den med din kone)</label>
+  <input type="text" id="code" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <p class="hint">Eller del hele linket. Koden står efter # i adresselinjen.</p>
+
+  <label>Butik</label>
+  <div class="row storeBtns">
+    <strong id="storeName" style="flex:1"></strong>
+    <button class="ghost" id="newStore">Ny</button>
+    <button class="ghost" id="renameStore">Omdøb</button>
+    <button class="ghost" id="deleteStore">Slet</button>
+  </div>
+  <p class="hint">Butikker og rækkefølge deles med alle på listen. Valget af butik gælder kun denne telefon.</p>
+
   <label>Rækkefølge i butikken (øverst = først)</label>
   <ul class="order" id="order"></ul>
   <div class="row" style="margin-top:14px">
@@ -75,16 +95,18 @@
 <script type="module">
 // ============================================================
 // 1) FIREBASE-KONFIGURATION
-//    Indsæt dine egne værdier fra Firebase Console (se README).
-//    Så længe apiKey er "DIN_API_KEY", kører appen i DEMO-tilstand
+//    Sæt apiKey til "DIN_API_KEY" for at køre i DEMO-tilstand
 //    (kun lokal lagring, ingen deling mellem telefoner).
 // ============================================================
 const firebaseConfig = {
-  apiKey: "DIN_API_KEY",
-  authDomain: "DIT_PROJEKT.firebaseapp.com",
-  projectId: "DIT_PROJEKT",
-  appId: "DIN_APP_ID"
+  apiKey: "AIzaSyCfHbcPmWAZP54OKoCHFDqO1jxw3QmuTzc",
+  authDomain: "indkoeb-fff3d.firebaseapp.com",
+  projectId: "indkoeb-fff3d",
+  storageBucket: "indkoeb-fff3d.firebasestorage.app",
+  messagingSenderId: "742542798644",
+  appId: "1:742542798644:web:551b650ee6728d53dc7f61"
 };
+const MIN_CODE = 8;
 
 // ============================================================
 // 2) SORTERING: nøgleord -> kategori (længste match vinder)
@@ -106,7 +128,7 @@ const KEYWORDS = {
   "Frost": ["frost","is ","vaniljeis","pizza","pommes","grøntsagsblanding","frosne","fiskestave","frossen","bagt kartoffel"],
   "Drikkevarer": ["vand","sodavand","cola","juice","øl","vin","saft","læsk","cider","danskvand","kildevand","energidrik","iste","kakaomælk"],
   "Snacks og slik": ["chips","slik","lakrids","nødder","mandler","popcorn","kiks","småkager","vingummi","peanuts","cashew","rosiner"],
-  "Husholdning": ["toiletpapir","køkkenrulle","opvask","vaskemiddel","skyllemiddel","affaldsposer","bagepapir","film","folie","batteri","batterier","pære","stearinlys","lys","svamp","rengøring","viskestykke","fryseposer","kaffefilter","opvaskemiddel","skraldepose"],
+  "Husholdning": ["toiletpapir","køkkenrulle","opvask","vaskemiddel","skyllemiddel","affaldsposer","bagepapir","film","folie","batteri","batterier","elpære","stearinlys","lys","svamp","rengøring","viskestykke","fryseposer","kaffefilter","opvaskemiddel","skraldepose"],
   "Personlig pleje": ["tandpasta","tandbørste","shampoo","balsam","sæbe","deodorant","barberskum","barberblade","creme","tamponer","bind","vatpinde","hårspray","solcreme","plaster","håndsæbe","lipbalm"]
 };
 
@@ -119,23 +141,48 @@ const ls = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
 
-function randomCode() {
-  const a = new Uint8Array(9); crypto.getRandomValues(a);
+// crypto.getRandomValues virker også uden HTTPS (fx test på lokalnet), det gør randomUUID ikke
+function randomCode(len = 9) {
+  const a = new Uint8Array(len); crypto.getRandomValues(a);
   return [...a].map(b => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("");
 }
 
-let listCode = location.hash.slice(1) || ls.get("listCode") || randomCode();
-ls.set("listCode", listCode);
-history.replaceState(null, "", "#" + listCode);
+function validCode(c) { return typeof c === "string" && c.length >= MIN_CODE && !c.includes("/"); }
 
-let order = ls.get("order", DEFAULT_ORDER);
-for (const c of DEFAULT_ORDER) if (!order.includes(c)) order.push(c);
-let overrides = ls.get("overrides", {});   // lærte rettelser: varenavn -> kategori
-let history_ = ls.get("history", []);       // tidligere varer til autocomplete
+let listCode = decodeURIComponent(location.hash.slice(1));
+if (!validCode(listCode)) listCode = ls.get("listCode") || "";
+if (!validCode(listCode)) listCode = randomCode();
+ls.set("listCode", listCode);
+history.replaceState(null, "", "#" + encodeURIComponent(listCode));
+window.addEventListener("hashchange", () => location.reload());
+
+let history_ = ls.get("history", []);   // tidligere varer til autocomplete (kun denne enhed)
+
+// Delt opsætning (butiksprofiler + lærte rettelser), synkroniseres via backend
+let meta = { profiles: {}, overrides: {} };
+let metaLoaded = false;
+let activeId = ls.get("activeProfile", null); // valgt butik gælder kun denne enhed
+
+function profileList() {
+  return Object.entries(meta.profiles || {})
+    .map(([id, p]) => ({ id, ...p }))
+    .sort((a, b) => (a.created || 0) - (b.created || 0) || (a.name || "").localeCompare(b.name || "", "da"));
+}
+function activeProfile() {
+  const ps = profileList();
+  return ps.find(p => p.id === activeId) || ps[0] || { id: "standard", name: "Standard", order: ls.get("order", DEFAULT_ORDER) };
+}
+function currentOrder() {
+  const o = (activeProfile().order || []).filter(c => DEFAULT_ORDER.includes(c));
+  for (const c of DEFAULT_ORDER) if (!o.includes(c)) o.push(c);
+  return o;
+}
+function normName(name) { return name.toLowerCase().trim(); }
 
 function categorize(name) {
-  const n = name.toLowerCase().trim();
-  if (overrides[n]) return overrides[n];
+  const n = normName(name);
+  const ov = (meta.overrides || {})[n];
+  if (ov && DEFAULT_ORDER.includes(ov)) return ov;
   let best = null, bestLen = 0;
   const tokens = n.split(/[^a-zæøå0-9]+/).filter(Boolean);
   for (const [cat, words] of Object.entries(KEYWORDS)) {
@@ -151,58 +198,114 @@ function categorize(name) {
 }
 
 // ============================================================
-// 4) BACKEND: Firestore eller demo (localStorage)
+// 4) FEJLVISNING
+// ============================================================
+function showError(e) {
+  console.error(e);
+  const code = (e && e.code) || "";
+  let msg = "Noget gik galt: " + ((e && e.message) || e);
+  if (code === "permission-denied") {
+    msg = "Firestore afviste adgangen. Tjek at reglerne er udgivet (se README), og at listekoden har mindst " + MIN_CODE + " tegn.";
+  } else if (code === "failed-precondition" || code === "not-found") {
+    msg = "Firestore-databasen findes ikke eller er ikke klar. Opret den i Firebase Console (Firestore > Create database).";
+  } else if (code === "unavailable") {
+    msg = "Ingen forbindelse til serveren. Ændringer gemmes lokalt og sendes, når du er online igen.";
+  }
+  $("#banner").textContent = msg;
+  $("#banner").classList.add("show");
+  $("#mode").textContent = code === "unavailable" ? "Offline" : "Fejl";
+  $("#mode").classList.toggle("error", code !== "unavailable");
+}
+function clearError() { $("#banner").classList.remove("show"); $("#mode").classList.remove("error"); }
+const run = (p) => Promise.resolve(p).catch(showError);
+
+// ============================================================
+// 5) BACKEND: Firestore eller demo (localStorage)
+//    Data: lists/{kode}/items/{id} og lists/{kode}/meta/config
 // ============================================================
 const demo = firebaseConfig.apiKey === "DIN_API_KEY";
 let backend;
 
+function deepMerge(target, patch) {
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === DELETE) delete target[k];
+    else if (v && typeof v === "object" && !Array.isArray(v)) target[k] = deepMerge(target[k] && typeof target[k] === "object" ? target[k] : {}, v);
+    else target[k] = v;
+  }
+  return target;
+}
+const DELETE = Symbol("delete");
+
 if (demo) {
-  const key = "demo-items-" + listCode;
+  const key = "demo-items-" + listCode, mkey = "demo-meta-" + listCode;
   const load = () => ls.get(key, []);
   const save = (v) => ls.set(key, v);
-  const subs = new Set();
+  const subs = new Set(), msubs = new Set();
   const emit = () => subs.forEach(cb => cb(load()));
-  window.addEventListener("storage", (e) => { if (e.key === key) emit(); });
+  const memit = () => msubs.forEach(cb => cb(ls.get(mkey, {}), false));
+  const mpatch = (p) => { ls.set(mkey, deepMerge(ls.get(mkey, {}), p)); memit(); };
+  window.addEventListener("storage", (e) => { if (e.key === key) emit(); if (e.key === mkey) memit(); });
   backend = {
     subscribe(cb) { subs.add(cb); cb(load()); },
-    async add(it) { save([...load(), { id: crypto.randomUUID(), ...it }]); emit(); },
+    subscribeMeta(cb) { msubs.add(cb); cb(ls.get(mkey, {}), false); },
+    async add(it) { save([...load(), { id: randomCode(16), ...it }]); emit(); },
     async update(id, patch) { save(load().map(x => x.id === id ? { ...x, ...patch } : x)); emit(); },
     async remove(id) { save(load().filter(x => x.id !== id)); emit(); },
-    async removeMany(ids) { save(load().filter(x => !ids.includes(x.id))); emit(); }
+    async removeMany(ids) { save(load().filter(x => !ids.includes(x.id))); emit(); },
+    async setOverride(name, cat) { mpatch({ overrides: { [name]: cat } }); },
+    async saveProfile(id, p) { mpatch({ profiles: { [id]: p } }); },
+    async deleteProfile(id) { mpatch({ profiles: { [id]: DELETE } }); }
   };
   $("#mode").textContent = "Demo (lokal)";
   $("#mode").classList.add("demo");
 } else {
-  const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js");
-  const fs = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
-  const app = initializeApp(firebaseConfig);
-  const db = fs.initializeFirestore(app, {
-    localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() })
-  });
-  const col = fs.collection(db, "lists", listCode, "items");
-  backend = {
-    subscribe(cb) {
-      fs.onSnapshot(col, { includeMetadataChanges: true }, (snap) => {
-        cb(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        $("#mode").textContent = snap.metadata.fromCache ? "Offline-cache" : "Live";
-      });
-    },
-    add(it) { return fs.addDoc(col, { ...it, createdAt: fs.serverTimestamp() }); },
-    update(id, patch) { return fs.updateDoc(fs.doc(col, id), patch); },
-    remove(id) { return fs.deleteDoc(fs.doc(col, id)); },
-    async removeMany(ids) { const b = fs.writeBatch(db); ids.forEach(i => b.delete(fs.doc(col, i))); return b.commit(); }
-  };
-  $("#mode").textContent = "Live";
+  try {
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js");
+    const fs = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+    const app = initializeApp(firebaseConfig);
+    const db = fs.initializeFirestore(app, {
+      localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() })
+    });
+    const col = fs.collection(db, "lists", listCode, "items");
+    const metaRef = fs.doc(db, "lists", listCode, "meta", "config");
+    const mset = (p) => fs.setDoc(metaRef, p, { merge: true });
+    backend = {
+      subscribe(cb) {
+        fs.onSnapshot(col, { includeMetadataChanges: true }, (snap) => {
+          cb(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+          if (!$("#mode").classList.contains("error")) {
+            $("#mode").textContent = snap.metadata.fromCache ? "Offline-cache" : (snap.metadata.hasPendingWrites ? "Gemmer…" : "Live");
+          }
+          if (!snap.metadata.fromCache) clearError();
+        }, showError);
+      },
+      subscribeMeta(cb) {
+        fs.onSnapshot(metaRef, { includeMetadataChanges: true }, (snap) => cb(snap.data() || {}, snap.metadata.fromCache), showError);
+      },
+      add(it) { return fs.addDoc(col, { ...it, createdAt: fs.serverTimestamp() }); },
+      update(id, patch) { return fs.updateDoc(fs.doc(col, id), patch); },
+      remove(id) { return fs.deleteDoc(fs.doc(col, id)); },
+      async removeMany(ids) { const b = fs.writeBatch(db); ids.forEach(i => b.delete(fs.doc(col, i))); return b.commit(); },
+      setOverride(name, cat) { return mset({ overrides: { [name]: cat } }); },
+      saveProfile(id, p) { return mset({ profiles: { [id]: p } }); },
+      deleteProfile(id) { return mset({ profiles: { [id]: fs.deleteField() } }); }
+    };
+    $("#mode").textContent = "Forbinder…";
+  } catch (e) {
+    showError(e);
+    throw e;
+  }
 }
 
 // ============================================================
-// 5) UI
+// 6) UI
 // ============================================================
 let items = [];
 
 function render() {
   const root = $("#list");
   root.innerHTML = "";
+  const order = currentOrder();
   const open = items.filter(i => !i.checked);
   const done = items.filter(i => i.checked);
 
@@ -211,36 +314,48 @@ function render() {
   }
 
   for (const cat of order) {
-    const group = open.filter(i => i.category === cat).sort((a, b) => a.name.localeCompare(b.name, "da"));
+    const group = open.filter(i => (DEFAULT_ORDER.includes(i.category) ? i.category : "Andet") === cat)
+      .sort((a, b) => a.name.localeCompare(b.name, "da"));
     if (!group.length) continue;
     const h = document.createElement("h2"); h.textContent = cat; root.appendChild(h);
-    group.forEach(i => root.appendChild(rowFor(i)));
+    group.forEach(i => root.appendChild(rowFor(i, order)));
   }
 
   if (done.length) {
     const h = document.createElement("h2"); h.textContent = "Købt (" + done.length + ")"; root.appendChild(h);
-    done.forEach(i => root.appendChild(rowFor(i)));
+    done.forEach(i => root.appendChild(rowFor(i, order)));
   }
 
-  $("#suggestions").innerHTML = history_.map(n => `<option value="${n.replace(/"/g, "&quot;")}">`).join("");
+  const dl = $("#suggestions"); dl.innerHTML = "";
+  history_.forEach(n => dl.appendChild(new Option(n, n)));
 }
 
-function rowFor(i) {
+function renderStores() {
+  const sel = $("#store"); sel.innerHTML = "";
+  const ap = activeProfile();
+  const ps = profileList();
+  (ps.length ? ps : [ap]).forEach(p => sel.add(new Option(p.name || "Uden navn", p.id, false, p.id === ap.id)));
+  $("#storeName").textContent = ap.name || "Uden navn";
+  $("#deleteStore").disabled = ps.length <= 1;
+}
+
+function rowFor(i, order) {
   const el = document.createElement("div");
   el.className = "item" + (i.checked ? " done" : "");
   const cb = document.createElement("input");
   cb.type = "checkbox"; cb.checked = !!i.checked;
-  cb.onchange = () => backend.update(i.id, { checked: cb.checked });
+  cb.onchange = () => run(backend.update(i.id, { checked: cb.checked }));
   const name = document.createElement("span"); name.className = "name"; name.textContent = i.name;
   const sel = document.createElement("select"); sel.className = "tag";
-  order.forEach(c => { const o = new Option(c, c, false, c === i.category); sel.add(o); });
+  sel.setAttribute("aria-label", "Kategori for " + i.name);
+  order.forEach(c => sel.add(new Option(c, c, false, c === i.category)));
   sel.onchange = () => {
-    overrides[i.name.toLowerCase().trim()] = sel.value; ls.set("overrides", overrides);
-    backend.update(i.id, { category: sel.value });
+    run(backend.setOverride(normName(i.name), sel.value));
+    run(backend.update(i.id, { category: sel.value }));
   };
   const del = document.createElement("button"); del.className = "del"; del.textContent = "×";
-  del.setAttribute("aria-label", "Slet");
-  del.onclick = () => backend.remove(i.id);
+  del.setAttribute("aria-label", "Slet " + i.name);
+  del.onclick = () => run(backend.remove(i.id));
   el.append(cb, name, sel, del);
   return el;
 }
@@ -251,36 +366,110 @@ $("#addForm").addEventListener("submit", (e) => {
   if (!raw) return;
   // Tillad flere varer adskilt af komma: "mælk, æg, agurk"
   raw.split(",").map(s => s.trim()).filter(Boolean).forEach(name => {
-    backend.add({ name, category: categorize(name), checked: false });
-    if (!history_.includes(name.toLowerCase())) history_.push(name.toLowerCase());
+    run(backend.add({ name, category: categorize(name), checked: false }));
+    const n = normName(name);
+    if (!history_.includes(n)) history_.push(n);
   });
   ls.set("history", history_.slice(-500));
   $("#newItem").value = "";
   $("#newItem").focus();
 });
 
+// Butiksvalg (pr. enhed)
+$("#store").onchange = (e) => { activeId = e.target.value; ls.set("activeProfile", activeId); renderStores(); render(); };
+
 // Indstillinger
+function saveOrder(order) {
+  const ap = activeProfile();
+  const p = { name: ap.name || "Standard", order };
+  if (!meta.profiles[ap.id]) p.created = Date.now();
+  meta.profiles = { ...meta.profiles, [ap.id]: { ...(meta.profiles[ap.id] || {}), ...p } }; // vis med det samme
+  run(backend.saveProfile(ap.id, p));
+  renderOrder(); render();
+}
 function renderOrder() {
   const ul = $("#order"); ul.innerHTML = "";
+  const order = currentOrder();
   order.forEach((c, idx) => {
     const li = document.createElement("li");
     const s = document.createElement("span"); s.textContent = c;
-    const up = document.createElement("button"); up.textContent = "↑";
-    const dn = document.createElement("button"); dn.textContent = "↓";
-    up.onclick = () => { if (idx > 0) { [order[idx-1], order[idx]] = [order[idx], order[idx-1]]; ls.set("order", order); renderOrder(); render(); } };
-    dn.onclick = () => { if (idx < order.length-1) { [order[idx+1], order[idx]] = [order[idx], order[idx+1]]; ls.set("order", order); renderOrder(); render(); } };
+    const up = document.createElement("button"); up.textContent = "↑"; up.setAttribute("aria-label", "Flyt " + c + " op");
+    const dn = document.createElement("button"); dn.textContent = "↓"; dn.setAttribute("aria-label", "Flyt " + c + " ned");
+    up.onclick = () => { if (idx > 0) { [order[idx-1], order[idx]] = [order[idx], order[idx-1]]; saveOrder(order); } };
+    dn.onclick = () => { if (idx < order.length-1) { [order[idx+1], order[idx]] = [order[idx], order[idx+1]]; saveOrder(order); } };
     li.append(s, up, dn); ul.appendChild(li);
   });
 }
-$("#settingsBtn").onclick = () => { $("#code").value = listCode; renderOrder(); $("#settings").showModal(); };
+$("#newStore").onclick = () => {
+  const name = (prompt("Navn på butik, fx Netto Vestergade") || "").trim();
+  if (!name) return;
+  const id = randomCode(8);
+  const p = { name, order: currentOrder(), created: Date.now() }; // starter som kopi af den aktuelle rækkefølge
+  meta.profiles = { ...meta.profiles, [id]: p };
+  activeId = id; ls.set("activeProfile", id);
+  run(backend.saveProfile(id, p));
+  renderStores(); renderOrder(); render();
+};
+$("#renameStore").onclick = () => {
+  const ap = activeProfile();
+  const name = (prompt("Nyt navn", ap.name || "") || "").trim();
+  if (!name) return;
+  meta.profiles = { ...meta.profiles, [ap.id]: { ...(meta.profiles[ap.id] || { order: currentOrder(), created: Date.now() }), name } };
+  run(backend.saveProfile(ap.id, meta.profiles[ap.id]));
+  renderStores();
+};
+$("#deleteStore").onclick = () => {
+  const ap = activeProfile();
+  if (profileList().length <= 1) return;
+  if (!confirm("Slet butikken \"" + (ap.name || "") + "\" for alle på listen?")) return;
+  const { [ap.id]: _, ...rest } = meta.profiles; meta.profiles = rest;
+  activeId = null; ls.set("activeProfile", null);
+  run(backend.deleteProfile(ap.id));
+  renderStores(); renderOrder(); render();
+};
+
+$("#settingsBtn").onclick = () => { $("#code").value = listCode; renderStores(); renderOrder(); $("#settings").showModal(); };
 $("#closeSettings").onclick = () => {
   const c = $("#code").value.trim();
+  if (c && c !== listCode) {
+    if (!validCode(c)) { alert("Listekoden skal være mindst " + MIN_CODE + " tegn og må ikke indeholde /."); return; }
+    ls.set("listCode", c); location.hash = encodeURIComponent(c); // hashchange genindlæser siden
+  }
   $("#settings").close();
-  if (c && c !== listCode) { ls.set("listCode", c); location.hash = c; location.reload(); }
 };
-$("#clearDone").onclick = () => backend.removeMany(items.filter(i => i.checked).map(i => i.id));
+$("#clearDone").onclick = () => run(backend.removeMany(items.filter(i => i.checked).map(i => i.id)));
 
+// ============================================================
+// 7) START
+// ============================================================
 backend.subscribe((data) => { items = data; render(); });
+backend.subscribeMeta((data, fromCache) => {
+  meta = { profiles: data.profiles || {}, overrides: data.overrides || {} };
+  // Første gang listen bruges: opret "Standard" ud fra lokale indstillinger fra den gamle version.
+  // Fast id "standard", så to telefoner ikke laver hver sin. Kun når data er bekræftet af serveren.
+  if (!fromCache && !metaLoaded) {
+    metaLoaded = true;
+    if (!Object.keys(meta.profiles).length) {
+      const p = { name: "Standard", order: currentOrder(), created: Date.now() };
+      meta.profiles = { standard: p };
+      run(backend.saveProfile("standard", p));
+    }
+    const legacy = ls.get("overrides", {});
+    if (Object.keys(legacy).length) {
+      run(Promise.all(Object.entries(legacy)
+        .filter(([n]) => !meta.overrides[n])
+        .map(([n, c]) => backend.setOverride(n, c))));
+      try { localStorage.removeItem("overrides"); } catch {}
+    }
+  }
+  renderStores(); render();
+  if ($("#settings").open) renderOrder();
+});
+
+// Service worker: gør at appen åbner uden net (fx i butikken)
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+  navigator.serviceWorker.register("sw.js").catch(e => console.warn("SW fejlede", e));
+}
 </script>
 </body>
 </html>
