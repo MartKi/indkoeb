@@ -1,8 +1,8 @@
 // Service worker: gemmer appens filer, så den kan åbnes uden net.
 // Selve listedata håndteres af Firestores egen offline-cache.
 // Hæv versionsnummeret, hvis du vil tvinge en ren genindlæsning af cachen.
-const CACHE = "indkoeb-v10";
-const SHELL = ["./", "index.html", "manifest.json", "icon-192.png", "icon-512.png"];
+const CACHE = "indkoeb-v11";
+const SHELL = ["./", "index.html", "manifest.json", "icon-192.png", "icon-512.png", "apple-touch-icon.png", "favicon-32.png"];
 const SDK_HOST = "www.gstatic.com";
 const NET_TIMEOUT_MS = 3000; // dårlig dækning i butikken: brug cachen efter 3 sek.
 
