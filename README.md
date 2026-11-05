@@ -76,6 +76,9 @@ Firebase-nøglen ikke er hemmelig, og listerne er beskyttet af listekoden.
   Appen retter aldrig selv det, du skriver. Enter tilføjer præcis den tekst, der står i feltet.
 - Noter til en vare: skriv `yoghurt: jordbær, ellers blåbær`. Alt efter kolon bliver en note, der vises under varen.
   Tryk på et varenavn for at rette navn eller note bagefter. Noten påvirker ikke sortering eller forslag.
+- Antal: tryk på varen og brug − og +, eller skriv `2 mælk` / `mælk x2`. Vises som **2×** foran varen, kun når antallet er over 1.
+  Mængder som `1 l mælk` eller `500 g hakket` bliver stående som tekst.
+  Skriver man en vare, der allerede står på listen, kommer en +1-knap i stedet for en dublet.
 - Tilføj flere varer ad gangen med komma: `mælk, æg, agurk`
 - Afkrydsede varer flyttes til "Købt" nederst
 

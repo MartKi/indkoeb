@@ -38,6 +38,10 @@
   .item { display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:6px; }
   .item input[type=checkbox] { width:22px; height:22px; accent-color:var(--accent); flex:none; }
   .item .name { flex:1; min-width:0; word-break:break-word; cursor:pointer; }
+  .item .qty { font-weight:700; color:var(--accent); margin-right:4px; }
+  .stepper { display:flex; align-items:center; gap:12px; margin-top:6px; }
+  .stepper button { width:44px; height:44px; padding:0; font-size:22px; line-height:1; background:transparent; color:var(--ink); border:1px solid var(--line); }
+  .stepper output { min-width:2ch; text-align:center; font-size:20px; font-weight:700; }
   .item .note { display:block; font-size:13px; color:var(--muted); margin-top:1px; white-space:pre-wrap; overflow-wrap:anywhere; }
   .item .note::before { content:"💬"; margin-right:4px; font-size:12px; } /* ren pynt, ikke en del af noten */
   textarea { font:inherit; font-size:16px; width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--ink); resize:vertical; }
@@ -97,6 +101,12 @@
   <h3 style="margin-top:0" tabindex="-1" autofocus>Ret vare</h3>
   <label for="editName">Vare</label>
   <input type="text" id="editName" maxlength="80" autocapitalize="off">
+  <label>Antal</label>
+  <div class="stepper">
+    <button type="button" id="qtyMinus" aria-label="Færre">−</button>
+    <output id="qtyVal" aria-live="polite">1</output>
+    <button type="button" id="qtyPlus" aria-label="Flere">+</button>
+  </div>
   <label for="editNote">Note (valgfri)</label>
   <textarea id="editNote" rows="2" maxlength="200" placeholder="fx køb den billigste"></textarea>
   <p class="hint">Genvej når du skriver varen på: yoghurt: jordbær, ellers blåbær</p>
@@ -455,10 +465,11 @@ function rowFor(i, order) {
   cb.type = "checkbox"; cb.checked = !!i.checked;
   cb.onchange = () => run(backend.update(i.id, { checked: cb.checked }));
   const name = document.createElement("span"); name.className = "name";
+  if ((i.qty || 1) > 1) { const q = document.createElement("span"); q.className = "qty"; q.textContent = i.qty + "×"; name.appendChild(q); }
   name.append(i.name);
   if (i.note) { const nt = document.createElement("span"); nt.className = "note"; nt.textContent = i.note; name.appendChild(nt); }
   name.setAttribute("role", "button"); name.tabIndex = 0;
-  name.setAttribute("aria-label", "Ret " + i.name + (i.note ? ", note: " + i.note : ""));
+  name.setAttribute("aria-label", "Ret " + ((i.qty || 1) > 1 ? i.qty + " " : "") + i.name + (i.note ? ", note: " + i.note : ""));
   name.onclick = () => openEdit(i);
   name.onkeydown = (e) => { if (e.key === "Enter") openEdit(i); };
   const catWrap = document.createElement("span"); catWrap.className = "catWrap";
@@ -506,18 +517,51 @@ $("#addForm").addEventListener("submit", (e) => {
   renderSuggest();
 });
 
+// Antal i teksten: "2 mælk", "2x mælk", "2 stk mælk", "mælk x2", "mælk 2", "mælk 2 stk"
+const MAX_QTY = 99;
+const UNIT = /^(l|kg|g|gr|dl|cl|ml|liter|pk|pakke|pakker|bakke|bakker|ds|dåse|dåser|glas|flaske|flasker|rl|rulle|ruller)\b/i;
+function parseQty(raw) {
+  const t = raw.trim();
+  let m = t.match(/^(\d{1,2})\s*(?:x|stk\.?)?\s+(.+)$/i);
+  // "1 l mælk" og "2 pk smør" er mængder, ikke antal: lad teksten være som den er
+  if (m && +m[1] >= 1 && !UNIT.test(m[2])) return { name: m[2].trim(), qty: Math.min(+m[1], MAX_QTY) };
+  m = t.match(/^(.+?)\s+(?:x\s*)?(\d{1,2})\s*(?:x|stk\.?)?$/i);
+  if (m && +m[2] >= 1) return { name: m[1].trim(), qty: Math.min(+m[2], MAX_QTY) };
+  return { name: t, qty: 1 };
+}
+
 function addItems(names, lastNote = "") {
   names = names.map(s => s.trim()).filter(Boolean);
   if (!names.length) return;
   const by = askName();
-  names.forEach((name, idx) => {
+  const dups = [];
+  const added = [];
+  names.forEach((raw, idx) => {
+    const { name, qty } = parseQty(raw);
+    if (!name) return;
     const note = idx === names.length - 1 ? lastNote.slice(0, 200) : "";
-    run(backend.add({ name, category: categorize(name), checked: false, ...(by ? { by } : {}), ...(note ? { note } : {}) }));
     const n = normName(name);
+    // Står varen allerede (ikke købt) på listen? Så spørg i stedet for at lave en dublet
+    const existing = items.find(i => !i.checked && normName(i.name) === n);
+    if (existing) { dups.push({ existing, qty, note }); return; }
+    run(backend.add({ name, category: categorize(name), checked: false,
+      ...(qty > 1 ? { qty } : {}), ...(by ? { by } : {}), ...(note ? { note } : {}) }));
+    added.push(n);
     if (!history_.includes(n)) history_.push(n);
   });
   ls.set("history", history_.slice(-500));
-  run(backend.bumpFreq([...new Set(names.map(normName))]));
+  if (added.length) run(backend.bumpFreq([...new Set(added)]));
+  if (dups.length) {
+    const msg = dups.length === 1 ? dups[0].existing.name + " står allerede på listen" : dups.length + " varer står allerede på listen";
+    const plus = dups.length === 1 ? "+" + dups[0].qty : "+1 til alle";
+    showToast(msg, plus, () => {
+      dups.forEach(({ existing, qty, note }) => {
+        const patch = { qty: Math.min((existing.qty || 1) + qty, MAX_QTY) };
+        if (note && !existing.note) patch.note = note;
+        run(backend.update(existing.id, patch));
+      });
+    }, 5000);
+  }
 }
 
 // ============================================================
@@ -701,21 +745,25 @@ $("#closeSettings").onclick = () => {
   $("#settings").close();
 };
 // Slet med mulighed for at fortryde i 4 sekunder (i stedet for "Er du sikker?")
-let undoTimer = null, undoItems = null;
+// Besked nederst med én knap (Fortryd, +1 osv.)
+let toastTimer = null, toastAction = null;
+function hideToast() { clearTimeout(toastTimer); toastAction = null; $("#toast").classList.remove("show"); }
+function showToast(msg, btnLabel, action, ms) {
+  clearTimeout(toastTimer);
+  $("#toastMsg").textContent = msg;
+  $("#undoBtn").textContent = btnLabel;
+  toastAction = action;
+  $("#toast").classList.add("show");
+  toastTimer = setTimeout(hideToast, ms);
+}
+$("#undoBtn").onclick = () => { const a = toastAction; hideToast(); if (a) a(); };
+
 function removeWithUndo(list, msg) {
   if (!list.length) return;
-  undoItems = list.map(i => ({ ...i }));
+  const copy = list.map(i => ({ ...i }));
   run(backend.removeMany(list.map(i => i.id)));
-  $("#toastMsg").textContent = msg;
-  $("#toast").classList.add("show");
-  clearTimeout(undoTimer);
-  undoTimer = setTimeout(() => { $("#toast").classList.remove("show"); undoItems = null; }, 4000);
+  showToast(msg, "Fortryd", () => run(backend.restore(copy)), 4000);
 }
-$("#undoBtn").onclick = () => {
-  if (undoItems) run(backend.restore(undoItems));
-  undoItems = null; clearTimeout(undoTimer);
-  $("#toast").classList.remove("show");
-};
 function clearAll() {
   removeWithUndo(items, "Listen er tømt (" + items.length + (items.length === 1 ? " vare)" : " varer)"));
   if ($("#settings").open) $("#settings").close();
@@ -723,11 +771,14 @@ function clearAll() {
 $("#clearAll").onclick = clearAll;
 
 // Ret vare og note (tryk på varenavnet)
-let editing = null;
+let editing = null, editQty = 1;
+$("#qtyMinus").onclick = () => { editQty = Math.max(1, editQty - 1); $("#qtyVal").value = editQty; };
+$("#qtyPlus").onclick = () => { editQty = Math.min(MAX_QTY, editQty + 1); $("#qtyVal").value = editQty; };
 function openEdit(i) {
   editing = i;
   $("#editName").value = i.name;
   $("#editNote").value = i.note || "";
+  editQty = i.qty || 1; $("#qtyVal").value = editQty;
   $("#editItem").showModal();
   $("#editItem h3").focus();
 }
@@ -740,6 +791,7 @@ $("#editSave").onclick = () => {
   const patch = {};
   if (name !== editing.name) { patch.name = name; patch.category = categorize(name); }
   if (note !== (editing.note || "")) patch.note = note;
+  if (editQty !== (editing.qty || 1)) patch.qty = editQty;
   if (Object.keys(patch).length) run(backend.update(editing.id, patch));
   editing = null;
   $("#editItem").close();
