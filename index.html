@@ -37,7 +37,9 @@
   h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:20px 0 6px; }
   .item { display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:6px; }
   .item input[type=checkbox] { width:22px; height:22px; accent-color:var(--accent); flex:none; }
-  .item .name { flex:1; word-break:break-word; }
+  .item .name { flex:1; min-width:0; word-break:break-word; cursor:pointer; }
+  .item .note { display:block; font-size:13px; color:var(--muted); margin-top:1px; white-space:pre-wrap; }
+  textarea { font:inherit; font-size:16px; width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--ink); resize:vertical; }
   .item.done .name { text-decoration:line-through; color:var(--muted); }
   select.tag { max-width:110px; font-size:12px; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:8px; padding:4px; }
   .del { background:transparent; color:var(--muted); padding:4px 8px; font-size:18px; }
@@ -77,7 +79,7 @@
     <button class="ghost" id="settingsBtn">Indstillinger</button>
   </div>
   <form id="addForm" autocomplete="off">
-    <input type="text" id="newItem" placeholder="Tilføj vare, fx agurk" enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="suggest">
+    <input type="text" id="newItem" placeholder="Fx agurk eller yoghurt: jordbær" enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="suggest">
     <button type="submit">Tilføj</button>
   </form>
   <div id="suggest" class="suggest" aria-label="Forslag"></div>
@@ -86,6 +88,20 @@
 
 <main id="list"></main>
 <div id="toast" class="toast" role="status" aria-live="polite"><span id="toastMsg"></span><button id="undoBtn" type="button">Fortryd</button></div>
+
+<dialog id="editItem">
+  <h3 style="margin-top:0" tabindex="-1" autofocus>Ret vare</h3>
+  <label for="editName">Vare</label>
+  <input type="text" id="editName" maxlength="80" autocapitalize="off">
+  <label for="editNote">Note (valgfri)</label>
+  <textarea id="editNote" rows="2" maxlength="200" placeholder="fx køb den billigste"></textarea>
+  <p class="hint">Genvej når du skriver varen på: yoghurt: jordbær, ellers blåbær</p>
+  <div class="row" style="margin-top:14px">
+    <button class="ghost" id="editCancel" type="button">Annuller</button>
+    <span style="flex:1"></span>
+    <button id="editSave" type="button">Gem</button>
+  </div>
+</dialog>
 
 <dialog id="settings">
   <h3 style="margin-top:0" tabindex="-1" autofocus>Indstillinger</h3>
@@ -434,7 +450,13 @@ function rowFor(i, order) {
   const cb = document.createElement("input");
   cb.type = "checkbox"; cb.checked = !!i.checked;
   cb.onchange = () => run(backend.update(i.id, { checked: cb.checked }));
-  const name = document.createElement("span"); name.className = "name"; name.textContent = i.name;
+  const name = document.createElement("span"); name.className = "name";
+  name.append(i.name);
+  if (i.note) { const nt = document.createElement("span"); nt.className = "note"; nt.textContent = i.note; name.appendChild(nt); }
+  name.setAttribute("role", "button"); name.tabIndex = 0;
+  name.setAttribute("aria-label", "Ret " + i.name + (i.note ? ", note: " + i.note : ""));
+  name.onclick = () => openEdit(i);
+  name.onkeydown = (e) => { if (e.key === "Enter") openEdit(i); };
   const sel = document.createElement("select"); sel.className = "tag";
   sel.setAttribute("aria-label", "Kategori for " + i.name);
   order.forEach(c => sel.add(new Option(c, c, false, c === i.category)));
@@ -462,19 +484,27 @@ $("#addForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const raw = $("#newItem").value.trim();
   if (!raw) return;
-  // Tillad flere varer adskilt af komma: "mælk, æg, agurk"
-  addItems(raw.split(","));
+  // Flere varer adskilt af komma: "mælk, æg, agurk".
+  // Alt efter første kolon er note til varen lige før: "mælk, yoghurt: jordbær, ellers blåbær"
+  const colon = raw.indexOf(":");
+  if (colon >= 0) {
+    const names = raw.slice(0, colon).split(",");
+    addItems(names, raw.slice(colon + 1).trim());
+  } else {
+    addItems(raw.split(","));
+  }
   $("#newItem").value = "";
   $("#newItem").focus();
   renderSuggest();
 });
 
-function addItems(names) {
+function addItems(names, lastNote = "") {
   names = names.map(s => s.trim()).filter(Boolean);
   if (!names.length) return;
   const by = askName();
-  names.forEach(name => {
-    run(backend.add({ name, category: categorize(name), checked: false, ...(by ? { by } : {}) }));
+  names.forEach((name, idx) => {
+    const note = idx === names.length - 1 ? lastNote.slice(0, 200) : "";
+    run(backend.add({ name, category: categorize(name), checked: false, ...(by ? { by } : {}), ...(note ? { note } : {}) }));
     const n = normName(name);
     if (!history_.includes(n)) history_.push(n);
   });
@@ -566,6 +596,7 @@ function renderSuggest() {
   box.innerHTML = "";
   const input = $("#newItem");
   const { seg } = currentSegment();
+  if (input.value.includes(":")) return; // man skriver en note, ikke en vare
   if (document.activeElement !== input && !seg) return;
   if (seg.length === 1) return; // ét bogstav giver for mange tilfældige forslag
   const list = suggestionsFor(seg);
@@ -682,6 +713,29 @@ function clearAll() {
   if ($("#settings").open) $("#settings").close();
 }
 $("#clearAll").onclick = clearAll;
+
+// Ret vare og note (tryk på varenavnet)
+let editing = null;
+function openEdit(i) {
+  editing = i;
+  $("#editName").value = i.name;
+  $("#editNote").value = i.note || "";
+  $("#editItem").showModal();
+  $("#editItem h3").focus();
+}
+$("#editCancel").onclick = () => { editing = null; $("#editItem").close(); };
+$("#editSave").onclick = () => {
+  if (!editing) return;
+  const name = $("#editName").value.trim();
+  const note = $("#editNote").value.trim().slice(0, 200);
+  if (!name) { $("#editName").focus(); return; }
+  const patch = {};
+  if (name !== editing.name) { patch.name = name; patch.category = categorize(name); }
+  if (note !== (editing.note || "")) patch.note = note;
+  if (Object.keys(patch).length) run(backend.update(editing.id, patch));
+  editing = null;
+  $("#editItem").close();
+};
 
 // ============================================================
 // 7) START

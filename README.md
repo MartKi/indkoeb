@@ -74,6 +74,8 @@ Firebase-nøglen ikke er hemmelig, og listerne er beskyttet af listekoden.
 - Forslag mens du skriver: "moz" giver mozzarella, "mozarela" og "mlk" virker også. Ét tryk tilføjer varen.
   Forslagene lærer af jeres egne varer (brugsfrekvens deles mellem telefonerne). Tomt felt viser "Ofte købt".
   Appen retter aldrig selv det, du skriver. Enter tilføjer præcis den tekst, der står i feltet.
+- Noter til en vare: skriv `yoghurt: jordbær, ellers blåbær`. Alt efter kolon bliver en note, der vises under varen.
+  Tryk på et varenavn for at rette navn eller note bagefter. Noten påvirker ikke sortering eller forslag.
 - Tilføj flere varer ad gangen med komma: `mælk, æg, agurk`
 - Afkrydsede varer flyttes til "Købt" nederst
 
