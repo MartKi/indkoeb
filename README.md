@@ -67,6 +67,9 @@ Firebase-nøglen ikke er hemmelig, og listerne er beskyttet af listekoden.
 - Butiksprofiler: vælg butik øverst. Hver butik har sin egen rækkefølge af afdelinger.
   Butikkerne deles med alle på listen, valget af butik gælder kun den enkelte telefon.
 - Ret en kategori manuelt, så husker appen valget til næste gang, også på de andre telefoner
+- Hvem skrev varen på: et bogstav ved hver vare. Grøn = dig, orange = den anden. Navnet sættes første gang og kan ændres under Indstillinger.
+- Efter indkøb: tryk **Ryd købte varer** nederst. Ikke-købte varer bliver stående til næste tur. **Tøm hele listen** ligger under Indstillinger.
+  Brug samme liste hver gang, så delingslinket og hjemmeskærmsikonet bliver ved med at virke.
 - Fejl fra Firestore (fx forkerte regler) vises som en rød besked øverst
 - Tilføj flere varer ad gangen med komma: `mælk, æg, agurk`
 - Afkrydsede varer flyttes til "Købt" nederst
