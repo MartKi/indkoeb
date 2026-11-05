@@ -43,7 +43,11 @@
   .del { background:transparent; color:var(--muted); padding:4px 8px; font-size:18px; }
   .who { flex:none; width:24px; height:24px; border-radius:50%; font-size:12px; font-weight:700; color:#fff; display:grid; place-items:center; }
   .item.done .who { opacity:.5; }
-  .clearBar { display:flex; justify-content:center; margin:10px 0 0; }
+  .clearBar { display:flex; justify-content:center; gap:8px; flex-wrap:wrap; margin:18px 0 0; }
+  .toast { position:fixed; left:50%; transform:translateX(-50%); bottom:calc(env(safe-area-inset-bottom) + 16px); z-index:20; display:none; align-items:center; gap:12px; width:max-content; max-width:calc(100% - 28px); white-space:nowrap; background:var(--ink); color:var(--bg); border-radius:12px; padding:10px 10px 10px 16px; box-shadow:0 6px 20px rgba(0,0,0,.25); font-size:15px; }
+  .toast.show { display:flex; }
+  .toast button { background:transparent; color:#86efac; border:1px solid currentColor; padding:6px 12px; font-weight:700; }
+  @media (prefers-color-scheme: dark) { .toast button { color:#2f7d4f; } }
   button.danger { color:var(--err); border-color:var(--err); }
   .suggest { display:flex; gap:6px; overflow-x:auto; margin-top:8px; padding-bottom:2px; scrollbar-width:none; }
   .suggest::-webkit-scrollbar { display:none; }
@@ -81,6 +85,7 @@
 </header>
 
 <main id="list"></main>
+<div id="toast" class="toast" role="status" aria-live="polite"><span id="toastMsg"></span><button id="undoBtn" type="button">Fortryd</button></div>
 
 <dialog id="settings">
   <h3 style="margin-top:0" tabindex="-1" autofocus>Indstillinger</h3>
@@ -318,6 +323,7 @@ if (demo) {
     async update(id, patch) { save(load().map(x => x.id === id ? { ...x, ...patch } : x)); emit(); },
     async remove(id) { save(load().filter(x => x.id !== id)); emit(); },
     async removeMany(ids) { save(load().filter(x => !ids.includes(x.id))); emit(); },
+    async restore(list) { const have = new Set(load().map(x => x.id)); save([...load(), ...list.filter(x => !have.has(x.id))]); emit(); },
     async setOverride(name, cat) { mpatch({ overrides: { [name]: cat } }); },
     async saveProfile(id, p) { mpatch({ profiles: { [id]: p } }); },
     async deleteProfile(id) { mpatch({ profiles: { [id]: DELETE } }); },
@@ -353,6 +359,7 @@ if (demo) {
       update(id, patch) { return fs.updateDoc(fs.doc(col, id), patch); },
       remove(id) { return fs.deleteDoc(fs.doc(col, id)); },
       async removeMany(ids) { const b = fs.writeBatch(db); ids.forEach(i => b.delete(fs.doc(col, i))); return b.commit(); },
+      async restore(list) { const b = fs.writeBatch(db); list.forEach(({ id, ...data }) => b.set(fs.doc(col, id), data)); return b.commit(); },
       setOverride(name, cat) { return mset({ overrides: { [name]: cat } }); },
       saveProfile(id, p) { return mset({ profiles: { [id]: p } }); },
       deleteProfile(id) { return mset({ profiles: { [id]: fs.deleteField() } }); },
@@ -392,11 +399,21 @@ function render() {
   if (done.length) {
     const h = document.createElement("h2"); h.textContent = "Købt (" + done.length + ")"; root.appendChild(h);
     done.forEach(i => root.appendChild(rowFor(i, order)));
+  }
+
+  if (items.length) {
     const bar = document.createElement("div"); bar.className = "clearBar";
-    const btn = document.createElement("button"); btn.className = "ghost";
-    btn.textContent = "Ryd købte varer (" + done.length + ")";
-    btn.onclick = () => run(backend.removeMany(done.map(i => i.id)));
-    bar.appendChild(btn); root.appendChild(bar);
+    if (done.length) {
+      const btn = document.createElement("button"); btn.className = "ghost";
+      btn.textContent = "Ryd købte (" + done.length + ")";
+      btn.onclick = () => removeWithUndo(done, done.length === 1 ? "1 købt vare ryddet" : done.length + " købte varer ryddet");
+      bar.appendChild(btn);
+    }
+    const all = document.createElement("button"); all.className = "ghost danger";
+    all.textContent = "Tøm listen (" + items.length + ")";
+    all.onclick = clearAll;
+    bar.appendChild(all);
+    root.appendChild(bar);
   }
 
   renderSuggest();
@@ -644,12 +661,27 @@ $("#closeSettings").onclick = () => {
   }
   $("#settings").close();
 };
-$("#clearAll").onclick = () => {
-  if (!items.length) return;
-  if (!confirm("Slet alle " + items.length + " varer på listen for alle? Butikker og rettelser bevares.")) return;
-  run(backend.removeMany(items.map(i => i.id)));
-  $("#settings").close();
+// Slet med mulighed for at fortryde i 8 sekunder (i stedet for "Er du sikker?")
+let undoTimer = null, undoItems = null;
+function removeWithUndo(list, msg) {
+  if (!list.length) return;
+  undoItems = list.map(i => ({ ...i }));
+  run(backend.removeMany(list.map(i => i.id)));
+  $("#toastMsg").textContent = msg;
+  $("#toast").classList.add("show");
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => { $("#toast").classList.remove("show"); undoItems = null; }, 8000);
+}
+$("#undoBtn").onclick = () => {
+  if (undoItems) run(backend.restore(undoItems));
+  undoItems = null; clearTimeout(undoTimer);
+  $("#toast").classList.remove("show");
 };
+function clearAll() {
+  removeWithUndo(items, "Listen er tømt (" + items.length + (items.length === 1 ? " vare)" : " varer)"));
+  if ($("#settings").open) $("#settings").close();
+}
+$("#clearAll").onclick = clearAll;
 
 // ============================================================
 // 7) START
