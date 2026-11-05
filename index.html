@@ -20,7 +20,10 @@
   header { position:sticky; top:0; background:var(--bg); padding:calc(env(safe-area-inset-top) + 10px) 14px 10px; border-bottom:1px solid var(--line); z-index:5; }
   .row { display:flex; gap:8px; align-items:center; }
   h1 { font-size:18px; margin:0; flex:1; min-width:0; display:flex; align-items:center; gap:6px; }
-  select.store { font:inherit; font-weight:700; color:var(--ink); background:transparent; border:0; padding:2px 0; max-width:100%; min-width:0; text-overflow:ellipsis; }
+  .storeWrap { display:flex; flex-direction:column; min-width:0; max-width:100%; border:1px solid var(--line); border-radius:10px; background:var(--card); padding:3px 10px 4px; }
+  .storeLbl { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); line-height:1.2; }
+  select.store { font:inherit; font-size:16px; font-weight:700; color:var(--ink); background:transparent; border:0; padding:0; margin:0; max-width:100%; min-width:0; text-overflow:ellipsis; }
+  dialog h3:focus { outline:none; }
   .badge { font-size:12px; color:var(--muted); white-space:nowrap; }
   .badge.demo { color:#b45309; }
   .badge.error { color:var(--err); }
@@ -58,7 +61,7 @@
 
 <header>
   <div class="row">
-    <h1><span aria-hidden="true">🛒</span><select id="store" class="store" aria-label="Butik"></select></h1>
+    <h1><span aria-hidden="true">🛒</span><span class="storeWrap"><span class="storeLbl" aria-hidden="true">Butik</span><select id="store" class="store" aria-label="Vælg butik"></select></span></h1>
     <span id="mode" class="badge"></span>
     <button class="ghost" id="settingsBtn">Indstillinger</button>
   </div>
@@ -73,7 +76,7 @@
 <main id="list"></main>
 
 <dialog id="settings">
-  <h3 style="margin-top:0">Indstillinger</h3>
+  <h3 style="margin-top:0" tabindex="-1" autofocus>Indstillinger</h3>
   <label for="code">Listekode (min. 8 tegn, del den med din kone)</label>
   <input type="text" id="code" autocapitalize="off" autocorrect="off" spellcheck="false">
   <p class="hint">Eller del hele linket. Koden står efter # i adresselinjen.</p>
@@ -460,7 +463,9 @@ $("#deleteStore").onclick = () => {
   renderStores(); renderOrder(); render();
 };
 
-$("#settingsBtn").onclick = () => { $("#code").value = listCode; $("#myName").value = myName; renderStores(); renderOrder(); $("#settings").showModal(); };
+$("#settingsBtn").onclick = () => { $("#code").value = listCode; $("#myName").value = myName; renderStores(); renderOrder(); $("#settings").showModal();
+  $("#settings h3").focus(); // undgå at tastaturet popper op på telefonen
+};
 $("#closeSettings").onclick = () => {
   const n = $("#myName").value.trim().slice(0, 20);
   if (n !== myName) { myName = n; ls.set("myName", n); render(); }
