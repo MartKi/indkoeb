@@ -60,6 +60,18 @@ Firebase-nøglen ikke er hemmelig, og listerne er beskyttet af listekoden.
 2. Send linket til din kone. Når hun åbner det, er I på samme liste.
 3. iPhone: Safari > Del > **Føj til hjemmeskærm**. Android: Chrome > menu > **Installer app**.
 
+### Snydeark
+
+| Du vil | Skriv eller tryk |
+|---|---|
+| Flere varer på én gang | `mælk, æg, agurk` |
+| Note til en vare | `yoghurt: jordbær, ellers blåbær` |
+| Antal | `2 mælk` eller `mælk x2` |
+| Rette navn, antal eller note | Tryk på varenavnet |
+| Flytte en vare til en anden afdeling | Tryk på 🏷️ |
+| Vælge butik | Tryk på butiksnavnet øverst |
+| Rydde efter indkøb | **Ryd købte** nederst. Fortryd i 4 sekunder |
+
 ## Funktioner
 
 - Live-sync mellem telefoner, med offline-cache (virker i butikker med dårlig dækning)
