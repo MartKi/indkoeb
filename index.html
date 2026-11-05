@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f7d4f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Indkøb</title>
+<style>
+  :root { --bg:#f6f7f4; --card:#fff; --ink:#1d2a22; --muted:#6b7a70; --accent:#2f7d4f; --line:#e3e8e2; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111613; --card:#1a211d; --ink:#e8efe9; --muted:#8fa096; --accent:#4fae77; --line:#26302a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; padding-bottom:90px; }
+  header { position:sticky; top:0; background:var(--bg); padding:calc(env(safe-area-inset-top) + 10px) 14px 10px; border-bottom:1px solid var(--line); z-index:5; }
+  .row { display:flex; gap:8px; align-items:center; }
+  h1 { font-size:18px; margin:0; flex:1; }
+  .badge { font-size:12px; color:var(--muted); }
+  .badge.demo { color:#b45309; }
+  form { display:flex; gap:8px; margin-top:10px; }
+  input[type=text] { flex:1; font-size:16px; padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+  button { font:inherit; border:0; border-radius:10px; padding:12px 16px; background:var(--accent); color:#fff; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--muted); padding:8px 10px; border:1px solid var(--line); font-size:14px; }
+  main { padding:6px 14px; max-width:640px; margin:0 auto; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:20px 0 6px; }
+  .item { display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:6px; }
+  .item input[type=checkbox] { width:22px; height:22px; accent-color:var(--accent); flex:none; }
+  .item .name { flex:1; word-break:break-word; }
+  .item.done .name { text-decoration:line-through; color:var(--muted); }
+  select.tag { max-width:110px; font-size:12px; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:8px; padding:4px; }
+  .del { background:transparent; color:var(--muted); padding:4px 8px; font-size:18px; }
+  .empty { text-align:center; color:var(--muted); margin-top:60px; }
+  dialog { border:1px solid var(--line); border-radius:14px; background:var(--card); color:var(--ink); max-width:420px; width:calc(100% - 28px); }
+  dialog::backdrop { background:rgba(0,0,0,.4); }
+  .order li { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--line); list-style:none; }
+  .order { padding:0; margin:10px 0; }
+  .order span { flex:1; }
+  .order button { padding:4px 10px; background:transparent; color:var(--ink); border:1px solid var(--line); }
+  label { display:block; font-size:13px; color:var(--muted); margin-top:12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="row">
+    <h1>🛒 Indkøb</h1>
+    <span id="mode" class="badge"></span>
+    <button class="ghost" id="settingsBtn">Indstillinger</button>
+  </div>
+  <form id="addForm" autocomplete="off">
+    <input type="text" id="newItem" placeholder="Tilføj vare, fx agurk" list="suggestions" enterkeyhint="done">
+    <button type="submit">Tilføj</button>
+  </form>
+  <datalist id="suggestions"></datalist>
+</header>
+
+<main id="list"></main>
+
+<dialog id="settings">
+  <h3 style="margin-top:0">Indstillinger</h3>
+  <label for="code">Listekode (del den med din kone, brug en lang og tilfældig)</label>
+  <input type="text" id="code">
+  <label>Rækkefølge i butikken (øverst = først)</label>
+  <ul class="order" id="order"></ul>
+  <div class="row" style="margin-top:14px">
+    <button class="ghost" id="clearDone">Ryd afkrydsede</button>
+    <span style="flex:1"></span>
+    <button id="closeSettings">Gem og luk</button>
+  </div>
+</dialog>
+
+<script type="module">
+// ============================================================
+// 1) FIREBASE-KONFIGURATION
+//    Indsæt dine egne værdier fra Firebase Console (se README).
+//    Så længe apiKey er "DIN_API_KEY", kører appen i DEMO-tilstand
+//    (kun lokal lagring, ingen deling mellem telefoner).
+// ============================================================
+const firebaseConfig = {
+  apiKey: "DIN_API_KEY",
+  authDomain: "DIT_PROJEKT.firebaseapp.com",
+  projectId: "DIT_PROJEKT",
+  appId: "DIN_APP_ID"
+};
+
+// ============================================================
+// 2) SORTERING: nøgleord -> kategori (længste match vinder)
+// ============================================================
+const DEFAULT_ORDER = [
+  "Frugt og grønt","Brød og bagværk","Mejeri og æg","Kød og fisk","Pålæg",
+  "Kolonial","Krydderier og konserves","Frost","Drikkevarer",
+  "Snacks og slik","Husholdning","Personlig pleje","Andet"
+];
+
+const KEYWORDS = {
+  "Frugt og grønt": ["agurk","tomat","peberfrugt","salat","spinat","gulerod","kartoffel","løg","hvidløg","porre","broccoli","blomkål","squash","aubergine","champignon","svampe","avocado","banan","æble","pære","appelsin","citron","lime","mandarin","clementin","druer","jordbær","blåbær","hindbær","melon","ananas","mango","kiwi","ingefær","persille","basilikum","purløg","dild","koriander","rødbede","selleri","majs","radise","spidskål","hvidkål","rødkål","grønkål","pastinak","fennikel","asparges","ærter","bønner","frugt","grønt"],
+  "Brød og bagværk": ["brød","rugbrød","toast","bolle","rundstykke","baguette","tortilla","wrap","kage","croissant","wienerbrød","pitabrød","burgerbolle","knækbrød"],
+  "Mejeri og æg": ["mælk","minimælk","letmælk","sødmælk","piskefløde","fløde","creme fraiche","smør","ost","mozzarella","parmesan","feta","yoghurt","skyr","kvark","æg","tykmælk","kærnemælk","cremefraiche","hytteost","mascarpone","ymer"],
+  "Kød og fisk": ["kylling","hakket","oksekød","svinekød","flæsk","bacon","pølse","frikadelle","medister","bøf","steak","filet","laks","torsk","rejer","tun","fisk","skinke","kød","mørbrad","kebab","leverpostej","nuggets"],
+  "Pålæg": ["pålæg","salami","hamburgerryg","rullepølse","spegepølse","remoulade","hummus"],
+  "Kolonial": ["ris","pasta","spaghetti","penne","nudler","mel","sukker","havregryn","müsli","cornflakes","morgenmad","olie","olivenolie","eddike","bouillon","fond","kaffe","te","nutella","marmelade","honning","peanutbutter","linser","kikærter","couscous","bulgur","gær","bagepulver","kakao","chokolade","ketchup","sennep","mayonnaise","sauce","pesto","soja"],
+  "Krydderier og konserves": ["salt","peber","paprika","karry","kanel","oregano","timian","spidskommen","chili","krydderi","hakkede tomater","flåede tomater","tomatpuré","tomatpure","dåse","konserves","kokosmælk","majs på dåse","bønner på dåse"],
+  "Frost": ["frost","is ","vaniljeis","pizza","pommes","grøntsagsblanding","frosne","fiskestave","frossen","bagt kartoffel"],
+  "Drikkevarer": ["vand","sodavand","cola","juice","øl","vin","saft","læsk","cider","danskvand","kildevand","energidrik","iste","kakaomælk"],
+  "Snacks og slik": ["chips","slik","lakrids","nødder","mandler","popcorn","kiks","småkager","vingummi","peanuts","cashew","rosiner"],
+  "Husholdning": ["toiletpapir","køkkenrulle","opvask","vaskemiddel","skyllemiddel","affaldsposer","bagepapir","film","folie","batteri","batterier","pære","stearinlys","lys","svamp","rengøring","viskestykke","fryseposer","kaffefilter","opvaskemiddel","skraldepose"],
+  "Personlig pleje": ["tandpasta","tandbørste","shampoo","balsam","sæbe","deodorant","barberskum","barberblade","creme","tamponer","bind","vatpinde","hårspray","solcreme","plaster","håndsæbe","lipbalm"]
+};
+
+// ============================================================
+// 3) HJÆLPERE + LOKAL LAGRING
+// ============================================================
+const $ = (s) => document.querySelector(s);
+const ls = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+
+function randomCode() {
+  const a = new Uint8Array(9); crypto.getRandomValues(a);
+  return [...a].map(b => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("");
+}
+
+let listCode = location.hash.slice(1) || ls.get("listCode") || randomCode();
+ls.set("listCode", listCode);
+history.replaceState(null, "", "#" + listCode);
+
+let order = ls.get("order", DEFAULT_ORDER);
+for (const c of DEFAULT_ORDER) if (!order.includes(c)) order.push(c);
+let overrides = ls.get("overrides", {});   // lærte rettelser: varenavn -> kategori
+let history_ = ls.get("history", []);       // tidligere varer til autocomplete
+
+function categorize(name) {
+  const n = name.toLowerCase().trim();
+  if (overrides[n]) return overrides[n];
+  let best = null, bestLen = 0;
+  const tokens = n.split(/[^a-zæøå0-9]+/).filter(Boolean);
+  for (const [cat, words] of Object.entries(KEYWORDS)) {
+    for (const raw of words) {
+      const w = raw.trim();
+      // korte nøgleord (<=3 tegn) skal matche et helt ord, så "te" ikke rammer "mynte"
+      const hit = w.length <= 3 ? tokens.includes(w) : n.includes(w);
+      if (hit && w.length > bestLen) { best = cat; bestLen = w.length; }
+    }
+  }
+  // TODO (fase 2): hvis best === null, kald et AI-endpoint og gem svaret i overrides
+  return best || "Andet";
+}
+
+// ============================================================
+// 4) BACKEND: Firestore eller demo (localStorage)
+// ============================================================
+const demo = firebaseConfig.apiKey === "DIN_API_KEY";
+let backend;
+
+if (demo) {
+  const key = "demo-items-" + listCode;
+  const load = () => ls.get(key, []);
+  const save = (v) => ls.set(key, v);
+  const subs = new Set();
+  const emit = () => subs.forEach(cb => cb(load()));
+  window.addEventListener("storage", (e) => { if (e.key === key) emit(); });
+  backend = {
+    subscribe(cb) { subs.add(cb); cb(load()); },
+    async add(it) { save([...load(), { id: crypto.randomUUID(), ...it }]); emit(); },
+    async update(id, patch) { save(load().map(x => x.id === id ? { ...x, ...patch } : x)); emit(); },
+    async remove(id) { save(load().filter(x => x.id !== id)); emit(); },
+    async removeMany(ids) { save(load().filter(x => !ids.includes(x.id))); emit(); }
+  };
+  $("#mode").textContent = "Demo (lokal)";
+  $("#mode").classList.add("demo");
+} else {
+  const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js");
+  const fs = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+  const app = initializeApp(firebaseConfig);
+  const db = fs.initializeFirestore(app, {
+    localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() })
+  });
+  const col = fs.collection(db, "lists", listCode, "items");
+  backend = {
+    subscribe(cb) {
+      fs.onSnapshot(col, { includeMetadataChanges: true }, (snap) => {
+        cb(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        $("#mode").textContent = snap.metadata.fromCache ? "Offline-cache" : "Live";
+      });
+    },
+    add(it) { return fs.addDoc(col, { ...it, createdAt: fs.serverTimestamp() }); },
+    update(id, patch) { return fs.updateDoc(fs.doc(col, id), patch); },
+    remove(id) { return fs.deleteDoc(fs.doc(col, id)); },
+    async removeMany(ids) { const b = fs.writeBatch(db); ids.forEach(i => b.delete(fs.doc(col, i))); return b.commit(); }
+  };
+  $("#mode").textContent = "Live";
+}
+
+// ============================================================
+// 5) UI
+// ============================================================
+let items = [];
+
+function render() {
+  const root = $("#list");
+  root.innerHTML = "";
+  const open = items.filter(i => !i.checked);
+  const done = items.filter(i => i.checked);
+
+  if (!items.length) {
+    root.innerHTML = '<div class="empty">Listen er tom.<br>Tilføj din første vare ovenfor.</div>';
+  }
+
+  for (const cat of order) {
+    const group = open.filter(i => i.category === cat).sort((a, b) => a.name.localeCompare(b.name, "da"));
+    if (!group.length) continue;
+    const h = document.createElement("h2"); h.textContent = cat; root.appendChild(h);
+    group.forEach(i => root.appendChild(rowFor(i)));
+  }
+
+  if (done.length) {
+    const h = document.createElement("h2"); h.textContent = "Købt (" + done.length + ")"; root.appendChild(h);
+    done.forEach(i => root.appendChild(rowFor(i)));
+  }
+
+  $("#suggestions").innerHTML = history_.map(n => `<option value="${n.replace(/"/g, "&quot;")}">`).join("");
+}
+
+function rowFor(i) {
+  const el = document.createElement("div");
+  el.className = "item" + (i.checked ? " done" : "");
+  const cb = document.createElement("input");
+  cb.type = "checkbox"; cb.checked = !!i.checked;
+  cb.onchange = () => backend.update(i.id, { checked: cb.checked });
+  const name = document.createElement("span"); name.className = "name"; name.textContent = i.name;
+  const sel = document.createElement("select"); sel.className = "tag";
+  order.forEach(c => { const o = new Option(c, c, false, c === i.category); sel.add(o); });
+  sel.onchange = () => {
+    overrides[i.name.toLowerCase().trim()] = sel.value; ls.set("overrides", overrides);
+    backend.update(i.id, { category: sel.value });
+  };
+  const del = document.createElement("button"); del.className = "del"; del.textContent = "×";
+  del.setAttribute("aria-label", "Slet");
+  del.onclick = () => backend.remove(i.id);
+  el.append(cb, name, sel, del);
+  return el;
+}
+
+$("#addForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const raw = $("#newItem").value.trim();
+  if (!raw) return;
+  // Tillad flere varer adskilt af komma: "mælk, æg, agurk"
+  raw.split(",").map(s => s.trim()).filter(Boolean).forEach(name => {
+    backend.add({ name, category: categorize(name), checked: false });
+    if (!history_.includes(name.toLowerCase())) history_.push(name.toLowerCase());
+  });
+  ls.set("history", history_.slice(-500));
+  $("#newItem").value = "";
+  $("#newItem").focus();
+});
+
+// Indstillinger
+function renderOrder() {
+  const ul = $("#order"); ul.innerHTML = "";
+  order.forEach((c, idx) => {
+    const li = document.createElement("li");
+    const s = document.createElement("span"); s.textContent = c;
+    const up = document.createElement("button"); up.textContent = "↑";
+    const dn = document.createElement("button"); dn.textContent = "↓";
+    up.onclick = () => { if (idx > 0) { [order[idx-1], order[idx]] = [order[idx], order[idx-1]]; ls.set("order", order); renderOrder(); render(); } };
+    dn.onclick = () => { if (idx < order.length-1) { [order[idx+1], order[idx]] = [order[idx], order[idx+1]]; ls.set("order", order); renderOrder(); render(); } };
+    li.append(s, up, dn); ul.appendChild(li);
+  });
+}
+$("#settingsBtn").onclick = () => { $("#code").value = listCode; renderOrder(); $("#settings").showModal(); };
+$("#closeSettings").onclick = () => {
+  const c = $("#code").value.trim();
+  $("#settings").close();
+  if (c && c !== listCode) { ls.set("listCode", c); location.hash = c; location.reload(); }
+};
+$("#clearDone").onclick = () => backend.removeMany(items.filter(i => i.checked).map(i => i.id));
+
+backend.subscribe((data) => { items = data; render(); });
+</script>
+</body>
+</html>
