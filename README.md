@@ -66,7 +66,7 @@ Firebase-nøglen ikke er hemmelig, og listerne er beskyttet af listekoden.
 - Service worker: appen kan åbnes fra hjemmeskærmen uden net
 - Butiksprofiler: vælg butik øverst. Hver butik har sin egen rækkefølge af afdelinger.
   Butikkerne deles med alle på listen, valget af butik gælder kun den enkelte telefon.
-- Ret en kategori manuelt, så husker appen valget til næste gang, også på de andre telefoner
+- Ret en kategori via 🏷️ ved varen, så husker appen valget til næste gang, også på de andre telefoner
 - Hvem skrev varen på: et bogstav ved hver vare. Grøn = dig, orange = den anden. Navnet sættes første gang og kan ændres under Indstillinger.
 - Efter indkøb: tryk **Ryd købte** nederst på listen. Ikke-købte varer bliver stående til næste tur. **Tøm listen** ligger ved siden af. Begge kan fortrydes i 8 sekunder.
   Brug samme liste hver gang, så delingslinket og hjemmeskærmsikonet bliver ved med at virke.
